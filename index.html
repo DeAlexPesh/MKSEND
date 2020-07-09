@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FB4s</title>
+  <style></style>
+</head>
+
+<body>
+  <form name="gcode" onSubmit="send(event);return false">
+    <input type="text" name="ip" onChange="getPrinterIp(event)">
+    <input type="file" name="file" accept=".gcode" onChange="getFileNameWithExt(event)">
+    <input type="submit" value="Отправить">
+  </form>
+
+  <script>
+    // curl -H 'Content-Type:application/octet-stream' http://192.168.5.254/upload?X-Filename=name.gcode --data-binary ./name.gcode
+
+    var fileNameWithExt = '';
+    var printerIp = '192.168.5.254';
+
+    document.querySelector('input[name=ip]').value = printerIp;
+
+    function send(e) {
+      const reader = new FileReader();
+
+      reader.onload = function (e) {
+        const blob = new Blob([e.target.result]);
+
+        console.log(e.target.result);
+
+        var formData = new FormData();
+        formData.append('X-Filename', fileNameWithExt);
+        formData.append("data", blob, {
+          type: "application/octet-stream"
+        });
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", 'http://' + printerIp + '/upload', true);
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState != 4) return;
+          alert('Файл загружен!');
+        }
+        xhr.send(formData);
+      }
+      reader.onloadstart = function () {}
+      reader.onprogress = function () {}
+      reader.onloadend = function () {}
+      reader.onerror = function () {}
+      reader.onabort = function () {}
+
+      var file = document.querySelector('input[name=file]').files[0];
+      if (file) {
+        reader.readAsArrayBuffer(file);
+      } else {
+        alert('Файл .gcode не выбран!');
+      }
+    }
+
+    function getPrinterIp(e) {
+      printerIp = e.target.value;
+    }
+
+    function getFileNameWithExt(e) {
+      if (!e || !e.target || !e.target.files || e.target.files.length === 0) {
+        return;
+      }
+      const name = e.target.files[0].name;
+      const lastDot = name.lastIndexOf('.');
+      const fileName = name.substring(0, lastDot);
+      const ext = name.substring(lastDot + 1);
+      fileNameWithExt = fileName + '.' + ext;
+    }
+  </script>
+</body>
+
+</html>
