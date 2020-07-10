@@ -9,14 +9,14 @@
 </head>
 
 <body>
-  <form name="gcode" onSubmit="send(event);return false">
+  <form onSubmit="send(event);return false">
     <input type="text" name="ip" onChange="getPrinterIp(event)">
     <input type="file" name="file" accept=".gcode" onChange="getFileNameWithExt(event)">
     <input type="submit" value="Отправить">
   </form>
 
   <script>
-    // curl -H 'Content-Type:application/octet-stream' http://192.168.5.254/upload?X-Filename=name.gcode --data-binary ./name.gcode
+    // curl -v -H 'Content-Type:application/octet-stream' http://ip/upload?X-Filename=name.gcode --data-binary @name.gcode
 
     var fileNameWithExt = '';
     var printerIp = '192.168.5.254';
@@ -29,27 +29,28 @@
       reader.onload = function (e) {
         const blob = new Blob([e.target.result]);
 
-        console.log(blob);
-
         var formData = new FormData();
-        formData.append('X-Filename', fileNameWithExt);
-        formData.append("data", blob, {
-          type: "application/octet-stream"
-        });
+        formData.append('data', blob, fileNameWithExt);
 
         var xhr = new XMLHttpRequest();
-        xhr.open("POST", 'http://' + printerIp + '/upload', true);
-        xhr.upload.onprogress = function (e) {
-          if (e.lengthComputable) {
-            var percentComplete = (e.loaded / e.total) * 100;
-            console.log(percentComplete + '% uploaded...');
+        xhr.open("POST", `http://${printerIp}/upload?X-Filename=${fileNameWithExt}`, true);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.onload = function () {
+          if (xhr.status != 200) {
+            console.log(`Ошибка ${xhr.status}: ${xhr.statusText}`);
+          } else {
+            console.log(`Отправлено ${xhr.response.length}`);
+
+            // sendCommandToWs('');
           }
         }
-        xhr.onload = function () {
-          if (this.status == 200) {
-            console.log('Server got:', JSON.parse(this.response));
-          } else {
-            alert('err');
+        xhr.onerror = function () {
+          console.log(`Ошибка соединения!`);
+        };
+        xhr.onprogress = function (e) {
+          if (e.lengthComputable) {
+            var perComp = (e.loaded / e.total) * 100;
+            console.log(`${perComp}% uploaded...`);
           }
         }
         xhr.send(formData);
@@ -64,7 +65,7 @@
       if (file) {
         reader.readAsArrayBuffer(file);
       } else {
-        alert('Файл .gcode не выбран!');
+        alert(`Файл .gcode не выбран!`);
       }
     }
 
@@ -77,10 +78,34 @@
         return;
       }
       const name = e.target.files[0].name;
+      /*
       const lastDot = name.lastIndexOf('.');
       const fileName = name.substring(0, lastDot);
       const ext = name.substring(lastDot + 1);
-      fileNameWithExt = fileName + '.' + ext;
+      */
+      fileNameWithExt = name;
+    }
+
+    function sendCommandToWs(com) {
+      var socket = new WebSocket(`ws://${printerIp}:8080`);
+      socket.onopen = function () {
+        console.log(`Соединение установлено`);
+      }
+      socket.onclose = function (e) {
+        if (e.wasClean) {
+          console.log(`Соединение закрыто чисто`);
+        } else {
+          console.log(`Обрыв соединения!`);
+        }
+        console.log(`Код: ${e.code}, причина: ${e.reason}`);
+      }
+      socket.onmessage = function (e) {
+        console.log(`Получены данные: ${e.data}`);
+      }
+      socket.onerror = function (e) {
+        console.log(`Ошибка: ${e.message}`);
+      }
+      socket.send(com);
     }
   </script>
 </body>
