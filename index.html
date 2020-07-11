@@ -5,31 +5,96 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FB4s</title>
-  <style></style>
+  <style>
+    label {
+      display: inline-block;
+      width: 80px;
+      text-align: right;
+    }
+
+    input {
+      display: inline-block;
+      vertical-align: center;
+      border: 1px solid #000;
+      border-radius: 0;
+      padding: 6px 8px;
+      margin: 0;
+      box-shadow: 0 0 3px #ddd;
+      outline: none;
+    }
+
+    input:focus {
+      box-shadow: 0 0 3px #888;
+    }
+
+    input[type="file"] {
+      padding: 3px 10px 3px 3px;
+    }
+
+    button {
+      border: 1px solid #000;
+      border-radius: 0;
+      padding: 6px 8px;
+      margin: 0;
+      outline: none;
+    }
+
+    button:focus {
+      box-shadow: 0 0 3px #888;
+    }
+
+    .comnds {
+      margin-top: 6px;
+      margin-left: 84px;
+    }
+
+    .form {
+      margin-top: 6px;
+    }
+  </style>
 </head>
 
 <body>
-  <form onSubmit="send(event);return false">
-    <input type="text" name="ip" onChange="getPrinterIp(event)">
-    <input type="file" name="file" accept=".gcode" onChange="getFileNameWithExt(event)">
-    <input type="submit" value="Отправить">
-  </form>
+  <div class="wrapper">
+    <div class="form">
+      <label for="ip">IP:</label>
+      <input type="text" name="ip" onChange="getPrinterIp(event)">
+    </div>
+    <div class="form">
+      <label for="file">GCODE:</label>
+      <input type="file" name="file" accept=".gcode" onChange="getFileData(event)">
+      <button onClick="send()">Печать</button>
+    </div>
+    <div class="form">
+      <label for="ws">CMD:</label>
+      <input type="text" name="ws">
+      <button onClick="sendWs()">Отправить</button>
+    </div>
+    <div class="comnds">
+      <button onClick="sendCmndToWs('G28 X0 Y0')">HOME</button>
+    </div>
+  </div>
 
   <script>
     // curl -v -H 'Content-Type:application/octet-stream' http://ip/upload?X-Filename=name.gcode --data-binary @name.gcode
+    // M23 - выбор файла
+    // M24 - старт печати
+    // M32 - выбор и запуск (не работают длинные имена)
 
-    var fileNameWithExt = '';
     var printerIp = '192.168.5.254';
+    var file = '';
 
     document.querySelector('input[name=ip]').value = printerIp;
 
-    function send(e) {
+    function send() {
       const reader = new FileReader();
 
       reader.onload = function (e) {
         const blob = new Blob([e.target.result]);
 
         var formData = new FormData();
+        var fileNameWithExt = file.name;
+
         formData.append('data', blob, fileNameWithExt);
 
         var xhr = new XMLHttpRequest();
@@ -41,7 +106,8 @@
           } else {
             console.log(`Отправлено ${xhr.response.length}`);
 
-            // sendCommandToWs('');
+            sendCmndToWs(`M23 ${fileNameWithExt}`);
+            sendCmndToWs(`M24`);
           }
         }
         xhr.onerror = function () {
@@ -55,13 +121,6 @@
         }
         xhr.send(formData);
       }
-      reader.onloadstart = function () { }
-      reader.onprogress = function () { }
-      reader.onloadend = function () { }
-      reader.onerror = function () { }
-      reader.onabort = function () { }
-
-      var file = document.querySelector('input[name=file]').files[0];
       if (file) {
         reader.readAsArrayBuffer(file);
       } else {
@@ -70,23 +129,27 @@
     }
 
     function getPrinterIp(e) {
+      if (!e || !e.target || !e.target.value || e.target.value.length === 0) {
+        printerIp = '';
+        return;
+      }
       printerIp = e.target.value;
     }
 
-    function getFileNameWithExt(e) {
+    function getFileData(e) {
       if (!e || !e.target || !e.target.files || e.target.files.length === 0) {
+        file = '';
         return;
       }
-      const name = e.target.files[0].name;
-      /*
-      const lastDot = name.lastIndexOf('.');
-      const fileName = name.substring(0, lastDot);
-      const ext = name.substring(lastDot + 1);
-      */
-      fileNameWithExt = name;
+      file = e.target.files[0];
     }
 
-    function sendCommandToWs(com) {
+    function sendWs(e) {
+      var ws = dockument.querySelector('input[name=ws]').value;
+      sendCmndToWs(ws);
+    }
+
+    function sendCmndToWs(cmnd) {
       var socket = new WebSocket(`ws://${printerIp}:8080`);
       socket.onopen = function () {
         console.log(`Соединение установлено`);
@@ -105,7 +168,7 @@
       socket.onerror = function (e) {
         console.log(`Ошибка: ${e.message}`);
       }
-      socket.send(com);
+      socket.send(cmnd);
     }
   </script>
 </body>
