@@ -87,27 +87,24 @@
     document.querySelector('input[name=ip]').value = printerIp;
 
     function send() {
-      const reader = new FileReader();
-
-      reader.onload = function (e) {
-        const blob = new Blob([e.target.result]);
-
+      if (file) {
         var formData = new FormData();
         var fileNameWithExt = file.name;
 
-        formData.append('data', blob, fileNameWithExt);
+        formData.append('data', file);
 
         var xhr = new XMLHttpRequest();
         xhr.open("POST", `http://${printerIp}/upload?X-Filename=${fileNameWithExt}`, true);
         xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        //xhr.setRequestHeader('Connection', 'keep-alive');
         xhr.onload = function () {
           if (xhr.status != 200) {
             console.log(`Ошибка ${xhr.status}: ${xhr.statusText}`);
           } else {
             console.log(`Отправлено ${xhr.response.length}`);
 
-            sendCmndToWs(`M23 ${fileNameWithExt}`);
-            sendCmndToWs(`M24`);
+            //sendCmndToWs(`M23 ${fileNameWithExt}`);
+            //sendCmndToWs(`M24`);
           }
         }
         xhr.onerror = function () {
@@ -119,10 +116,11 @@
             console.log(`${perComp}% uploaded...`);
           }
         }
-        xhr.send(formData);
-      }
-      if (file) {
-        reader.readAsArrayBuffer(file);
+        if (xhr.sendAsBinary) {
+          xhr.sendAsBinary(formData);
+        } else {
+          xhr.send(formData);
+        }
       } else {
         alert(`Файл .gcode не выбран!`);
       }
@@ -150,7 +148,8 @@
     }
 
     function sendCmndToWs(cmnd) {
-      var socket = new WebSocket(`ws://${printerIp}:8080`);
+      console.log(cmnd);
+      var socket = new WebSocket(`ws://${printerIp}:8080/`);
       socket.onopen = function () {
         console.log(`Соединение установлено`);
       }
