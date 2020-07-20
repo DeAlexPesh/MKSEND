@@ -13,6 +13,10 @@ httpPort = 80
 sockPort = 8080
 inGcode = ''
 inCmnd = ''
+upItems = ['a','b','c','d']
+
+def showPopup(s):
+    sg.popup(s, no_titlebar=True, keep_on_top=True)
 
 
 def echo(s, isNew=False):
@@ -64,22 +68,49 @@ def sendFile(fileUrl):
 
 
 layout = [
-    [sg.Text('IP:', size=(7, 1), justification='right'),
-     sg.InputText(key='_IP_', size=(25, 1), background_color='white', justification='center',
-                  change_submits=True, do_not_clear=True, default_text=ip)],
-    [sg.Text('CMND:', size=(7, 1), justification='right'),
-     sg.InputText(key='_CMND_', size=(25, 1), justification='center',
-                  change_submits=True, do_not_clear=True),
-     sg.Submit('Отправить', key='_SEND_', size=(15, 1))],
-    [sg.Text('GCODE:', size=(7, 1), justification='right'),
-     sg.InputText(key='_GCODE_', size=(25, 1), change_submits=True,
-                  do_not_clear=True, readonly=True),
-     sg.FileBrowse('...', size=(3, 1)),
-     sg.Submit('Печать', key='_PRINT_', size=(10, 1))],
-    [sg.Text('ECHO:', size=(7, 10), justification='right'),
-     sg.Multiline(key='_OUTPUT_', size=(42, 10), disabled=True)],
-    [sg.Text('', size=(7, 1), justification='right'), sg.ProgressBar(
-        100, key='_PROGRESS_', size=(29, 20), orientation='h')],
+    [sg.Column(layout=[
+        [sg.Frame(title=' IP адрес принтера ',
+                  layout=[
+                      [sg.InputText(key='_IP_', default_text=ip, size=(33, 1),
+                                    justification='center', background_color='white',
+                                    change_submits=True, do_not_clear=True)]
+                  ],
+                  border_width=1)
+         ],
+        [sg.Frame(title=' Отправить файл ',
+                  layout=[
+                      [sg.InputText(key='_GCODE_', size=(33, 1), change_submits=True,
+                                    do_not_clear=True, readonly=True)],
+                      [sg.FileBrowse(button_text='...', size=(3, 1), target='_GCODE_'),
+                       sg.Submit(button_text='Отправить',
+                                 key='_SEND_FILE_', size=(10, 1)),
+                       sg.Checkbox(text='печать', key='_PRINT_FILE_')]
+                  ],
+                  border_width=1)
+         ],
+        [sg.Frame(title=' Отправить команду ',
+                  layout=[
+                      [sg.InputText(key='_CMND_', default_text='', size=(33, 1),
+                                    justification='center', background_color='white',
+                                    change_submits=True, do_not_clear=True)],
+                      [sg.Submit(button_text='Отправить',
+                                 key='_SEND_', size=(15, 1))]
+                  ],
+                  border_width=1)
+         ]
+    ], pad=(0, 0)),
+        sg.Column(layout=[
+            [sg.Frame(title=' Загруженные файлы ',
+                      layout=[
+                          [sg.Submit(button_text='Обновить',
+                                     key='_TREE_UPDATE_', size=(20, 1))],
+                          [sg.Listbox(values=upItems, size=(21,10), enable_events=True, bind_return_key=True, select_mode='single', key='_LISTBOX_')]
+                      ],
+                      border_width=0)
+             ]
+        ], pad=(0, 0))
+    ],
+    [sg.Multiline(key='_OUTPUT_', disabled=True)]
 ]
 window = sg.Window('MKSEND', layout)
 
@@ -106,12 +137,12 @@ while True:
     if event in ('_CMND_'):
         inCmnd = values[event]
 
-    if event in ('_PRINT_', '_SEND_'):
+    if event in ('_SEND_FILE_', '_SEND_'):
         if not ip:
-            echo('Выберите IP!', True)
+            showPopup('Выберите IP!')
             continue
 
-    if event in ('_PRINT_'):
+    if event in ('_SEND_FILE_'):
         if not inGcode:
             echo('Выберите файл GCODE!', True)
         else:
