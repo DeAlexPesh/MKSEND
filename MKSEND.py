@@ -74,7 +74,7 @@ def sendFile(file, fileName, ip, port=80):
         res = requests.post(url=url,
                             data=data,
                             headers={'Content-Type': 'application/octet-stream'})
-        time.sleep(3)
+        time.sleep(5)
         return False if res.status_code != 200 else True
     except Exception as ex:
         print(f'Exception: {ex}')
