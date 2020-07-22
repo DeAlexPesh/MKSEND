@@ -40,8 +40,8 @@ def isPrinted():
 def sendRawSocket(cmnd, ip, port=8080):
     try:
         result = [False]
-        bCmnd = f'{cmnd}\r\n'.encode('utf-8')
-        # print(bCmnd)
+        bCmnd = f'{cmnd}\r\n'.encode('utf-8', 'ignore')
+        print(f'Command: {bCmnd}')
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as conn:
             conn.settimeout(15.0)
             conn.connect((ip, port))
@@ -51,13 +51,13 @@ def sendRawSocket(cmnd, ip, port=8080):
                 data = b''
                 while data != b'\n':
                     data = conn.recv(1)
-                    line = line + str(data, 'utf-8')
+                    line += data.decode('utf-8', 'ignore')
                 line = line.replace("\n", "").replace("\r", "")
                 if line == 'ok':
                     break
                 result.append(line)
         result[0] = True
-        # print(result)
+        print(f'Result: {result}')
     except Exception as ex:
         print(f'Exception: {ex}')
     finally:
@@ -84,9 +84,12 @@ def sendFile(file, fileName, ip, port=80):
 def getFilelist():
     ip = getIp()
     vals = sendRawSocket('M20', ip)
-    if vals.pop(0):
-        vals.remove('Begin file list')
-        vals.remove('End file list')
+    try:
+        if vals.pop(0):
+            vals.remove('Begin file list')
+            vals.remove('End file list')
+    except Exception:
+        pass
     return vals
 
 
@@ -131,6 +134,7 @@ def btnSendCmnd():
             log(r)
     else:
         log('Ошибка выполнения команды!')
+    log('Выполнено.')
     return
 
 
@@ -175,7 +179,8 @@ layout = [
                           [sg.Listbox(key='_LISTBOX_', values=[], size=(
                               30, 10), background_color='#ffffff', select_mode=sg.LISTBOX_SELECT_MODE_EXTENDED)],
                           [sg.Submit(key='_TREEUPDATE_', button_text='Обновить', size=(8, 1)),
-                           sg.Submit(key='_TREEDELETE_', button_text='Удалить', size=(7, 1)),
+                           sg.Submit(key='_TREEDELETE_',
+                                     button_text='Удалить', size=(7, 1)),
                            sg.Submit(key='_TREEPRINT_', button_text='Печать', size=(6, 1))]
                       ],
                       border_width=2,
@@ -183,7 +188,8 @@ layout = [
              ]
         ], pad=(0, 0))
     ],
-    [sg.Multiline(key='_OUTPUT_', size=(66, 5), disabled=True, pad=((5, 5), (10, 10)))]
+    [sg.Multiline(key='_OUTPUT_', size=(66, 5),
+                  disabled=True, pad=((5, 5), (10, 10)))]
 ]
 window = sg.Window('MKSEND', layout)
 
@@ -231,7 +237,7 @@ while True:
         ip = getIp()
         selected = getFilelistSelected()
         for s in selected:
-            if sendRawSocket(f'M30 /{s}', ip)[0]:
+            if sendRawSocket(f'M30 {s}', ip)[0]:
                 log(f'{s} удален!')
 
     if event in ('_PRINTSTOP_'):
