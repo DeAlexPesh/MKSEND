@@ -10,24 +10,12 @@ import _thread
 import threading
 import queue
 import platform
+import tkinter as tk
+import tkinter.ttk as ttk
 
 sg.ChangeLookAndFeel('LightGrey3')
 
 OS_NAME = platform.system()
-
-
-def reciver(client, q):
-    while run:
-        try:
-            data = client.recv(1024)
-            if data:
-                q.put((client, data))
-                print('{} отправил: {}'.format(
-                    client.getpeername(), data.decode()))
-        except:
-            break
-    client.close()
-
 
 threadFileSend = None
 
@@ -40,24 +28,6 @@ def log(s):
 def logClr(s=''):
     window['_OUTPUT_'].update(f'{s}\r\n')
     return
-
-
-def getIp():
-    ip = re.findall(r"(^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$)", values['_IP_'])
-    return ip[0] if ip else ''
-
-
-def getCmnd():
-    return values['_CMND_']
-
-
-def getGcode():
-    return values['_GCODE_']
-
-
-def isPrinted():
-    return values['_ISPRINTED_']
-
 
 def setProgress(size, progress):
     window.Element('_PROGRESS_').update_bar(float(progress)/float(size)*100)
@@ -163,36 +133,16 @@ def sendRawSocket(cmnd, ip, port=8080):
         return result
 
 
-def updateFilelist():
-    ip = getIp()
-    fl = sendRawSocket('M20', ip)
-    res = []
-    if fl.pop(0):
-        try:
-            elBegin = fl.index('Begin file list') + 1
-            elEnd = fl.index('End file list')
-            while elBegin != elEnd:
-                res.append(fl[elBegin])
-                elBegin += 1
-        except:
-            pass
-    window.Element('_LISTBOX_').update(values=res)
-    return
-
-
-def getFilelistSelected():
-    return values['_LISTBOX_']
-
 
 def printFileByName(name):
-    ip = getIp()
+    ip = gui.getIp()
     if sendRawSocket(f'M23 {name}', ip)[0]:
         return sendRawSocket('M24', ip)[0]
 
 
 def btnSendFile():
-    ip = getIp()
-    gcode = getGcode()
+    ip = gui.getIp()
+    gcode = gui.getFile()
     fileName = os.path.basename(gcode)
     if sendFile(gcode, fileName, ip):
         log('Файл загружен.')
@@ -206,8 +156,8 @@ def btnSendFile():
 
 
 def btnSendCmnd():
-    ip = getIp()
-    cmnd = getCmnd()
+    ip = gui.getIp()
+    cmnd = gui.getGcode()
     logClr('-------')
     log(f'Выполнение: {cmnd}')
     res = sendRawSocket(cmnd, ip)
@@ -220,140 +170,137 @@ def btnSendCmnd():
     return
 
 
-layout = [
-    [sg.Column([
-        [sg.Frame(title=' IP адрес принтера ',
-                  layout=[
-                      [sg.InputText(key='_IP_',
-                                    default_text='192.168.5.254',
-                                    size=(30, 1),
-                                    justification='center',
-                                    background_color='#77ff77',
-                                    change_submits=True,
-                                    do_not_clear=True)]
-                  ],
-                  border_width=2,
-                  pad=((5, 5), (0, 12)))
-         ],
-        [sg.Frame(title=' Загрузить файл ',
-                  layout=[
-                      [sg.InputText(key='_GCODE_',
-                                    readonly=True, size=(30, 1),
-                                    justification='right',
-                                    background_color='#ffffff',
-                                    change_submits=True,
-                                    do_not_clear=True)],
-                      [sg.ProgressBar(100, key='_PROGRESS_',
-                                      orientation='h',
-                                      size=(20, 20))],
-                      [sg.FileBrowse(button_text='...',
-                                     size=(3, 1),
-                                     target='_GCODE_'),
-                       sg.Submit(key='_SENDFILE_',
-                                 button_text='Отправить',
-                                 size=(10, 1)),
-                       sg.Submit(key='_STOPSENDFILE_',
-                                 button_text='Стоп',
-                                 size=(10, 1)),
-                       sg.Checkbox(key='_ISPRINTED_',
-                                   text='печать')]
-                  ],
-                  border_width=2,
-                  pad=((5, 5), (5, 10)))
-         ],
-        [sg.Frame(title=' Выполнить команду ',
-                  layout=[
-                      [sg.InputText(key='_CMND_',
-                                    default_text='',
-                                    size=(30, 1),
-                                    justification='center',
-                                    background_color='#ffffff',
-                                    change_submits=True,
-                                    do_not_clear=True)],
-                      [sg.Submit(key='_SEND_',
-                                 button_text='Выполнить',
-                                 size=(15, 1))]
-                  ],
-                  border_width=2)
-         ]
-    ], pad=(0, 0)),
-        sg.Column(layout=[
-            [sg.Frame(title=' Загруженные файлы ',
-                      layout=[
-                          [sg.Listbox(key='_LISTBOX_', values=[], size=(
-                              30, 10), background_color='#ffffff', select_mode=sg.LISTBOX_SELECT_MODE_EXTENDED)],
-                          [sg.Submit(key='_TREEUPDATE_', button_text='Обновить', size=(8, 1)),
-                           sg.Submit(key='_TREEDELETE_',
-                                     button_text='Удалить', size=(7, 1)),
-                           sg.Submit(key='_TREEPRINT_', button_text='Печать', size=(6, 1))]
-                      ],
-                      border_width=2,
-                      pad=((8, 5), (0, 10)))
-             ]
-        ], pad=(0, 0))
-    ],
-    [sg.Multiline(key='_OUTPUT_', size=(66, 5),
-                  disabled=True, pad=((5, 5), (10, 10)))]
-]
-window = sg.Window('MKSEND', layout)
+class MKSEND:
+    def __init__(self, master):
+        self.master = master
+        master.title("MKSEND")
 
-sendFileThread = None
+        ipFrame = tk.LabelFrame(master, text = " IP адрес принтера ")
+        
+        svIpInput = tk.StringVar()
+        svIpInput.trace("w", lambda name, index, mode, sv=svIpInput: self.__ipCallback(svIpInput))
+        self.__ipInput = tk.Entry(ipFrame, textvariable = svIpInput, bd = 0, bg = "#77ff77", justify = tk.CENTER)
+        self.__ipInput.insert(tk.END, "192.168.5.254")
+        self.__ipInput.pack(fill = tk.BOTH, ipady = 2, padx = 4, pady = 4)
 
-while True:
-    event, values = window.read(timeout=500)
+        ipFrame.grid(column = 1, columnspan = 1, padx = 4, pady = (2, 4), row = 1, rowspan = 1, sticky="NWE")
 
-    if event in (None, 'Exit', 'Cancel'):
-        break
 
-    if event in ('_IP_'):
-        window.Element(event).update(
-            background_color=('#77ff77' if getIp() else '#ff7777'))
+        sendFileFrame = tk.LabelFrame(master, text = " Загрузить файл ")
 
-    if event in ('_SENDFILE_', '_SEND_'):
-        if not getIp():
-            logClr('Ошибка IP адреса!')
-            continue
+        self.__sendFileLabel = tk.Label(sendFileFrame, text = "", bg = "#ffffff")
+        self.__sendFileLabel.grid(column = 1, columnspan = 5, ipadx = 2, ipady = 2, padx = (4, 0), pady = (2, 0), row = 1, rowspan = 1, sticky="NWES")
 
-    if event in ('_SENDFILE_'):
-        if not getGcode():
-            logClr('Файл не выбран!')
-        else:
-            threadFileSend = StoppableThread(target=btnSendFile)
-            print(threadFileSend)
-            threadFileSend.start()
+        sendFileBtnOpen = tk.Button(sendFileFrame, text = "...", command = self.__fileBrowse)
+        sendFileBtnOpen.grid(column = 6, columnspan = 1, ipadx = 2, padx = (0, 4), pady = (2, 0), row = 1, rowspan = 1, sticky="NWE")
 
-    if event in ('_STOPSENDFILE_'):
-        if threadFileSend:
-            threadFileSend.stop()
-            print(threadFileSend)
+        self.__sendFileBtn = tk.Button(sendFileFrame, text = "Отправить", command = self.__sendFile)
+        self.__sendFileBtn.grid(column = 1, columnspan = 1, ipadx = 2, padx = (4, 0), pady = (4, 0), row = 2, rowspan = 1, sticky="NWE")
 
-    if event in ('_SEND_'):
-        if not getCmnd():
-            log('Команда отсутствует!')
-        else:
-            _thread.start_new_thread(btnSendCmnd, ())
+        self.__isPrinted = tk.IntVar()
+        self.__isPrinted.set(1)
+        self.__sendFileIsPrinted = tk.Checkbutton(sendFileFrame, text = "Напечатать", variable = self.__isPrinted, onvalue = 1, offvalue = 0)
+        self.__sendFileIsPrinted.grid(column = 2, columnspan = 1, ipadx = 2, padx = 4, pady = (4, 0), row = 2, rowspan = 1, sticky="NW")
 
-    if event in ('_TREEUPDATE_'):
-        _thread.start_new_thread(updateFilelist, ())
+        self.__sendFilePB = ttk.Progressbar(sendFileFrame, orient = tk.HORIZONTAL, length = 100)
+        #self.__sendFilePB.pack()
 
-    if event in ('_TREEPRINT_'):
-        ip = getIp()
-        selected = getFilelistSelected()
-        if len(selected) > 1:
-            log('Отправить на печать можно только один элемент!')
-        else:
-            for s in selected:
-                log('Печать...' if printFileByName(
-                    s) else 'Ошибка запуска печати!')
+        self.__sendFileCancelBtn = tk.Button(sendFileFrame, text = "Отмена", command = self.__cancelSendFile)
+        #self.__sendFileCancelBtn.pack()
 
-    if event in ('_TREEDELETE_'):
-        ip = getIp()
-        selected = getFilelistSelected()
-        for s in selected:
-            if sendRawSocket(f'M30 0:/{s}', ip)[0]:
-                log(f'{s} удален!')
+        sendFileFrame.grid(column = 1, columnspan = 1, padx = 4, pady = 2, row = 2, rowspan = 1, sticky="NWE")
 
-    if event in ('_PRINTSTOP_'):
-        sendRawSocket(f'M25', getIp())
 
-window.close()
+        gcodeFrame = tk.LabelFrame(master, text = " Выполнить команду ")
+
+        self.gcodeInput = tk.Entry(gcodeFrame, bd = 0, justify = tk.CENTER)
+        self.gcodeInput.pack(fill = tk.BOTH, ipady = 2, padx = 4, pady = (2, 0))
+
+        self.gcodeBtn = tk.Button(gcodeFrame, text = "Выполнить", command = _thread.start_new_thread(self.__sendGcode, ()))
+        self.gcodeBtn.pack(fill = tk.BOTH, padx = 4, pady = 4)
+
+        gcodeFrame.grid(column = 1, columnspan = 1, padx = 4, pady = 2, row = 3, rowspan = 1, sticky="NWE")
+
+
+        fileFrame = tk.LabelFrame(master, text = " Загруженные файлы ")        
+
+        filePaneListbox = tk.Frame(fileFrame, bg = "#ffffff")
+        filePaneListbox.pack(fill = tk.BOTH, padx = 4, pady = (2, 0))
+        self.fileListbox = tk.Listbox(filePaneListbox, bd = 0, bg = filePaneListbox.cget("bg"), selectmode = tk.EXTENDED, highlightthickness = 0, borderwidth = 0)
+        fileScrollbar = tk.Scrollbar(filePaneListbox, bg = filePaneListbox.cget("bg"))
+        fileScrollbar.config(command = self.fileListbox.yview)
+        self.fileListbox.pack(side = tk.LEFT, padx = 2, pady = 2, fill = tk.BOTH)
+        fileScrollbar.pack(side = tk.RIGHT, fill = tk.Y)
+        self.fileListbox.config(yscrollcommand = fileScrollbar.set)
+
+        self.fileUpdateBtn = tk.Button(fileFrame, text = "Удалить", command = self.__removeFile)
+        self.fileUpdateBtn.pack(side = tk.BOTTOM, fill = tk.BOTH, padx = 4, pady = (0, 4))
+
+        self.filePrintBtn = tk.Button(fileFrame, text = "Печать", command = self.__printFile)
+        self.filePrintBtn.pack(side = tk.BOTTOM, fill = tk.BOTH, padx = 4, pady = 0)  
+
+        self.fileUpdateBtn = tk.Button(fileFrame, text = "Обновить", command = _thread.start_new_thread(self.__updateFileList, ()))
+        self.fileUpdateBtn.pack(side = tk.BOTTOM, fill = tk.BOTH, padx = 4, pady = (2, 0))
+
+        fileFrame.grid(column = 2, columnspan = 1, padx = (0, 4), pady = 2, row = 1, rowspan = 4, sticky="NWES")
+
+
+        self.closeBtn = tk.Button(master, text = "Close", command = master.quit)
+        #self.closeBtn.pack()
+
+    def getIp(self):
+        ip = re.findall(r"(^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$)", self.__ipInput.get())
+        return ip[0] if ip else ''
+
+    def __ipCallback(self, sv):
+        self.__ipInput.configure(bg=('#77ff77' if self.getIp() else '#ff7777'))
+
+    def getFile(self):
+       return self.__sendFileLabel.cget()
+
+    def __fileBrowse(self): 
+      fileName = tk.filedialog.askopenfilename(initialdir = "/", title = "Выбор файла", filetypes = (("GCODE", "*.gcode*"), ("Все", "*.*"))) 
+      self.__sendFileLabel.configure(text = fileName)
+
+    def __sendFile(self):
+        return
+
+    def __cancelSendFile(self):
+        return
+
+    def getGcode(self):
+        return self.gcodeInput.get()
+
+    def __sendGcode(self):
+        return
+
+    def __getSelectedFile(self):
+       ids = self.fileListbox.curselection()
+       sels = []
+       for i in ids:
+           sels.append(self.fileListbox.get(i))
+       return sels
+
+    def __updateFileList(self):
+       ip = self.getIp()
+       gList = [True,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] #sendRawSocket('M20', ip)
+       if gList.pop(0):
+           try:
+             elBgn = 1 #gList.index('Begin file list') + 1
+             elEnd = 15 #gList.index('End file list')
+             while elBgn != elEnd:
+                self.fileListbox.insert(tk.END, gList[elBgn])
+                elBgn += 1
+           except:
+               pass
+    
+    def __printFile(self):
+        print(self.__getSelectedFile())
+        return
+
+    def __removeFile(self):
+        return
+
+root = tk.Tk()
+gui = MKSEND(root)
+root.mainloop()
