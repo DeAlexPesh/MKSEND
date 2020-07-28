@@ -1,7 +1,6 @@
 import os
 import io
 import PySimpleGUI as sg
-import errno
 import re
 import requests
 import socket
@@ -9,8 +8,26 @@ import sys
 import time
 import _thread
 import threading
+import queue
+import platform
 
 sg.ChangeLookAndFeel('LightGrey3')
+
+OS_NAME = platform.system()
+
+
+def reciver(client, q):
+    while run:
+        try:
+            data = client.recv(1024)
+            if data:
+                q.put((client, data))
+                print('{} отправил: {}'.format(
+                    client.getpeername(), data.decode()))
+        except:
+            break
+    client.close()
+
 
 threadFileSend = None
 
@@ -116,57 +133,50 @@ def sendRawSocket(cmnd, ip, port=8080):
     result = [False]
     try:
         bCmnd = f'{cmnd}\r\n'.encode('utf-8', 'ignore')
-        # print(f'Command: {bCmnd}')
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as conn:
-            # conn.settimeout(15.0)
+            conn.settimeout(10.0)
             conn.connect((ip, port))
             conn.sendall(bCmnd)
-            while True:
+            run = True
+            while run:
                 line = ''
                 data = b''
                 while data != b'\n':
                     data = conn.recv(1)
-                    line += data.decode('utf-8', 'ignore')
+                    print(data)
+                    if data:
+                        line += data.decode('utf-8', 'ignore')
                 line = line.replace("\n", "").replace("\r", "")
-                # if line == 'ok':
-                #     break
-                result.append(line)
+                if line:
+                    result.append(line)
         result[0] = True
         print(f'Result: {result}')
-    except socket.error as ex:
-        e = ex.args[0]
-        if e == errno.EAGAIN or e == errno.EWOULDBLOCK:
-            result[0] = True
-            print(f'Result: {result}')
-        else:
-            print(f'Exception: {ex}')
     except socket.timeout:
         result[0] = True
         print(f'Result: {result}')
     except Exception as ex:
         print(f'Exception: {ex}')
     finally:
+        if OS_NAME == 'Linux':
+            conn.shutdown(socket.SHUT_RDWR)
         conn.close()
-        conn = None
         return result
 
 
-def getFilelist():
-    ip = getIp()
-    res = sendRawSocket('M20', ip)
-    try:
-        if res.pop(0):
-            res.remove('Begin file list')
-            res.remove('End file list')
-            res.remove('ok')
-    except:
-        res = []
-        pass
-    return res
-
-
 def updateFilelist():
-    window.Element('_LISTBOX_').update(values=getFilelist())
+    ip = getIp()
+    fl = sendRawSocket('M20', ip)
+    res = []
+    if fl.pop(0):
+        try:
+            elBegin = fl.index('Begin file list') + 1
+            elEnd = fl.index('End file list')
+            while elBegin != elEnd:
+                res.append(fl[elBegin])
+                elBegin += 1
+        except:
+            pass
+    window.Element('_LISTBOX_').update(values=res)
     return
 
 
@@ -204,9 +214,9 @@ def btnSendCmnd():
     if res.pop(0):
         for r in res:
             log(r)
+        log('Выполнено.')
     else:
         log('Не выполнено!')
-    log('Выполнено.')
     return
 
 
